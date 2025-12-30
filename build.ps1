@@ -40,9 +40,10 @@ if ($Deploy) {
     $Destination = "C:\Program Files\Common Files\VST3\ShowMe.vst3"
     Write-Host "Deploying to $Destination..." -ForegroundColor Cyan
 
-    # Need admin for Program Files
+    # Delete old and copy new (need admin for Program Files)
+    $deleteCmd = "if exist `"$Destination`" rmdir /s /q `"$Destination`""
     $copyCmd = "xcopy /E /I /Y `"$VST3Path`" `"$Destination\`""
-    Start-Process cmd -ArgumentList "/c $copyCmd" -Verb RunAs -Wait
+    Start-Process cmd -ArgumentList "/c $deleteCmd && $copyCmd" -Verb RunAs -Wait
 
     Write-Host "Deployed! Restart FL Studio and rescan plugins." -ForegroundColor Green
 }

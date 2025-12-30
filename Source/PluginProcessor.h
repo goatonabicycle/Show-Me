@@ -1,6 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include <set>
+#include <mutex>
 
 class AudioPluginAudioProcessor  : public juce::AudioProcessor
 {
@@ -34,6 +36,9 @@ public:
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    
+    std::set<int> activeNotes;
+    std::mutex notesMutex;
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)

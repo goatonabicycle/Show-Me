@@ -111,9 +111,24 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                               juce::MidiBuffer& midiMessages)
 {
-    juce::ignoreUnused (midiMessages);
-
     juce::ScopedNoDenormals noDenormals;
+
+    {
+        std::lock_guard<std::mutex> lock (notesMutex);
+        for (const auto metadata : midiMessages)
+        {
+            auto message = metadata.getMessage();
+
+            if (message.isNoteOn())
+            {
+                activeNotes.insert (message.getNoteNumber());
+            }
+            else if (message.isNoteOff())
+            {
+                activeNotes.erase (message.getNoteNumber());
+            }
+        }
+    }
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
