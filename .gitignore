@@ -1,0 +1,43 @@
+# Claude Code
+.claude/
+
+# Build outputs
+Builds/
+build/
+*.vst3
+*.dll
+*.exe
+*.lib
+*.pdb
+*.obj
+*.o
+
+# Visual Studio
+*.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+.vs/
+out/
+x64/
+x86/
+Debug/
+Release/
+
+# JUCE generated
+JuceLibraryCode/
+
+# IDE and editor files
+*.user
+*.ncb
+*.aps
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
