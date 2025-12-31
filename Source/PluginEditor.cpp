@@ -4,349 +4,520 @@
 #include <climits>
 
 namespace {
-    const int GUITAR_TUNING[6] = {
-        64,  // E4 (high E)
-        59,  // B3
-        55,  // G3
-        50,  // D3
-        45,  // A2
-        40   // E2 (low E)
-    };
-
+    const int GUITAR_TUNING[6] = { 64, 59, 55, 50, 45, 40 };
     const char* NOTE_NAMES[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
-    juce::String midiNoteToName (int midiNote)
+    const char* SCALE_NAMES[] = {
+        "Chromatic", "Major", "Minor", "Harmonic Minor", "Melodic Minor",
+        "Pentatonic Maj", "Pentatonic Min", "Blues", "Dorian", "Phrygian",
+        "Lydian", "Mixolydian", "Locrian", "Whole Tone", "Diminished",
+        "Phrygian Dominant", "Hungarian Minor", "Double Harmonic"
+    };
+    const int NUM_SCALES = 18;
+
+    const int SCALE_PATTERNS[18][12] = {
+        { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+        { 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1 },
+        { 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0 },
+        { 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1 },
+        { 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1 },
+        { 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 0 },
+        { 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0 },
+        { 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0 },
+        { 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0 },
+        { 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0 },
+        { 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1 },
+        { 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0 },
+        { 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0 },
+        { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 },
+        { 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1 },
+        { 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0 },
+        { 1, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1 },
+        { 1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1 },
+    };
+
+    juce::String noteNameOnly (int midiNote)
     {
-        int noteIndex = midiNote % 12;
-        int octave = (midiNote / 12) - 1;
-        return juce::String (NOTE_NAMES[noteIndex]) + juce::String (octave);
+        return juce::String (NOTE_NAMES[midiNote % 12]);
     }
 
-    bool hasFretMarker (int fret)
-    {
-        return fret == 3 || fret == 5 || fret == 7 || fret == 9 ||
-               fret == 12 || fret == 15 || fret == 17 || fret == 19 ||
-               fret == 21 || fret == 24;
-    }
-
-    bool isDoubleDot (int fret)
-    {
-        return fret == 12 || fret == 24;
-    }
-    
+    // Colors
     const juce::Colour bgDark (18, 18, 22);
-    const juce::Colour bgCard (28, 28, 35);
-    const juce::Colour textPrimary (240, 240, 245);
-    const juce::Colour textSecondary (140, 140, 155);
-    const juce::Colour accentGreen (72, 199, 142);
-    const juce::Colour accentBlue (99, 149, 238);
-    const juce::Colour fretboardWood (38, 32, 26);
-    const juce::Colour fretWire (160, 155, 145);
-    const juce::Colour stringColor (190, 185, 175);
+    const juce::Colour panelBg (28, 28, 34);
+    const juce::Colour controlBg (38, 38, 46);
+    const juce::Colour controlBorder (58, 58, 68);
+    const juce::Colour textBright (235, 235, 240);
+    const juce::Colour textDim (120, 120, 130);
+    const juce::Colour accentBlue (100, 160, 220);
+    const juce::Colour activeNote (82, 209, 152);
+    const juce::Colour rootNote (200, 110, 90);
+    const juce::Colour scaleNote (80, 140, 190);
+    const juce::Colour outOfScale (42, 40, 38);
+    const juce::Colour fretboardCol (38, 32, 26);
+    const juce::Colour fretMetal (120, 115, 105);
+    const juce::Colour nutBone (220, 215, 200);
+
+    const int MENU_BAR_HEIGHT = 44;
 }
+
+// Custom LookAndFeel for modern controls
+class ModernLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    ModernLookAndFeel()
+    {
+        setColour (juce::ComboBox::backgroundColourId, controlBg);
+        setColour (juce::ComboBox::outlineColourId, controlBorder);
+        setColour (juce::ComboBox::textColourId, textBright);
+        setColour (juce::ComboBox::arrowColourId, textDim);
+        setColour (juce::PopupMenu::backgroundColourId, controlBg);
+        setColour (juce::PopupMenu::textColourId, textBright);
+        setColour (juce::PopupMenu::highlightedBackgroundColourId, accentBlue);
+        setColour (juce::PopupMenu::highlightedTextColourId, textBright);
+        setColour (juce::Slider::backgroundColourId, controlBg);
+        setColour (juce::Slider::trackColourId, accentBlue);
+        setColour (juce::Slider::thumbColourId, textBright);
+    }
+
+    void drawComboBox (juce::Graphics& g, int width, int height, bool,
+                       int, int, int, int, juce::ComboBox& box) override
+    {
+        auto bounds = juce::Rectangle<int> (0, 0, width, height).toFloat();
+        g.setColour (controlBg);
+        g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (controlBorder);
+        g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+        // Arrow
+        auto arrowZone = bounds.removeFromRight (24).reduced (8, 10);
+        juce::Path arrow;
+        arrow.addTriangle (arrowZone.getX(), arrowZone.getY(),
+                          arrowZone.getRight(), arrowZone.getY(),
+                          arrowZone.getCentreX(), arrowZone.getBottom());
+        g.setColour (textDim);
+        g.fillPath (arrow);
+    }
+
+    void drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                           float sliderPos, float, float,
+                           juce::Slider::SliderStyle, juce::Slider& slider) override
+    {
+        auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat();
+        auto trackBounds = bounds.reduced (0, bounds.getHeight() * 0.35f);
+
+        // Track background
+        g.setColour (controlBg);
+        g.fillRoundedRectangle (trackBounds, 3.0f);
+        g.setColour (controlBorder);
+        g.drawRoundedRectangle (trackBounds.reduced (0.5f), 3.0f, 1.0f);
+
+        // Filled portion
+        float fillWidth = sliderPos - x;
+        if (fillWidth > 0)
+        {
+            auto fillBounds = trackBounds.withWidth (fillWidth);
+            g.setColour (accentBlue);
+            g.fillRoundedRectangle (fillBounds, 3.0f);
+        }
+
+        // Thumb
+        float thumbX = sliderPos;
+        float thumbSize = trackBounds.getHeight() + 6;
+        auto thumbBounds = juce::Rectangle<float> (thumbX - thumbSize/2,
+                                                    trackBounds.getCentreY() - thumbSize/2,
+                                                    thumbSize, thumbSize);
+        g.setColour (textBright);
+        g.fillEllipse (thumbBounds);
+        g.setColour (accentBlue);
+        g.drawEllipse (thumbBounds.reduced (1), 2.0f);
+    }
+};
 
 AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
-    auto setupSlider = [this](juce::Slider& slider, juce::Label& label,
-                               const juce::String& name, double min, double max, double def) {
-        slider.setRange (min, max, 1);
-        slider.setValue (def);
-        slider.setSliderStyle (juce::Slider::LinearHorizontal);
-        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 35, 20);
-        slider.setColour (juce::Slider::backgroundColourId, bgCard);
-        slider.setColour (juce::Slider::trackColourId, accentBlue.withAlpha (0.6f));
-        slider.setColour (juce::Slider::thumbColourId, accentBlue);
-        slider.setColour (juce::Slider::textBoxTextColourId, textPrimary);
-        slider.setColour (juce::Slider::textBoxBackgroundColourId, bgDark);
-        slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        addAndMakeVisible (slider);
+    // Set custom look and feel
+    static ModernLookAndFeel modernLF;
+    setLookAndFeel (&modernLF);
 
-        label.setText (name, juce::dontSendNotification);
-        label.setColour (juce::Label::textColourId, textSecondary);
-        label.setJustificationType (juce::Justification::centredRight);
-        addAndMakeVisible (label);
-    };
+    // Key selector
+    for (int i = 0; i < 12; ++i)
+        keySelector.addItem (NOTE_NAMES[i], i + 1);
+    keySelector.setSelectedId (1);
+    addAndMakeVisible (keySelector);
+    keyLabel.setText ("KEY", juce::dontSendNotification);
+    keyLabel.setColour (juce::Label::textColourId, textDim);
+    keyLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (keyLabel);
 
-    setupSlider (positionSlider, positionLabel, "Position", 0, 24, 2);
-    setupSlider (rangeSlider, rangeLabel, "Range", 4, 7, 6);
-    setupSlider (stringsSlider, stringsLabel, "Strings", 6, 8, 6);
-    setupSlider (fretsSlider, fretsLabel, "Frets", 12, 24, 24);
+    // Scale selector
+    for (int i = 0; i < NUM_SCALES; ++i)
+        scaleSelector.addItem (SCALE_NAMES[i], i + 1);
+    scaleSelector.setSelectedId (2);
+    addAndMakeVisible (scaleSelector);
+    scaleLabel.setText ("SCALE", juce::dontSendNotification);
+    scaleLabel.setColour (juce::Label::textColourId, textDim);
+    scaleLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (scaleLabel);
 
-    setSize (1200, 380);
+    // Position slider
+    positionSlider.setRange (0, 18, 1);
+    positionSlider.setValue (0);
+    positionSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    positionSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 28, 20);
+    positionSlider.setColour (juce::Slider::textBoxTextColourId, textBright);
+    positionSlider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    addAndMakeVisible (positionSlider);
+    positionLabel.setText ("POSITION", juce::dontSendNotification);
+    positionLabel.setColour (juce::Label::textColourId, textDim);
+    positionLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (positionLabel);
+
+    // Range slider
+    rangeSlider.setRange (3, 8, 1);
+    rangeSlider.setValue (5);
+    rangeSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    rangeSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 28, 20);
+    rangeSlider.setColour (juce::Slider::textBoxTextColourId, textBright);
+    rangeSlider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    addAndMakeVisible (rangeSlider);
+    rangeLabel.setText ("RANGE", juce::dontSendNotification);
+    rangeLabel.setColour (juce::Label::textColourId, textDim);
+    rangeLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (rangeLabel);
+
+    // Strings slider
+    stringsSlider.setRange (4, 8, 1);
+    stringsSlider.setValue (6);
+    stringsSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    stringsSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 28, 20);
+    stringsSlider.setColour (juce::Slider::textBoxTextColourId, textBright);
+    stringsSlider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    addAndMakeVisible (stringsSlider);
+    stringsLabel.setText ("STRINGS", juce::dontSendNotification);
+    stringsLabel.setColour (juce::Label::textColourId, textDim);
+    stringsLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (stringsLabel);
+
+    // Frets slider
+    fretsSlider.setRange (12, 24, 1);
+    fretsSlider.setValue (24);
+    fretsSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    fretsSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 28, 20);
+    fretsSlider.setColour (juce::Slider::textBoxTextColourId, textBright);
+    fretsSlider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    addAndMakeVisible (fretsSlider);
+    fretsLabel.setText ("FRETS", juce::dontSendNotification);
+    fretsLabel.setColour (juce::Label::textColourId, textDim);
+    fretsLabel.setFont (juce::Font (11.0f, juce::Font::bold));
+    addAndMakeVisible (fretsLabel);
+
+    setResizable (true, true);
+    setResizeLimits (1000, 240, 1800, 500);
+    setSize (1200, 300);
     startTimerHz (30);
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
 {
+    setLookAndFeel (nullptr);
 }
 
-void AudioPluginAudioProcessorEditor::timerCallback()
+void AudioPluginAudioProcessorEditor::timerCallback() { repaint(); }
+
+void AudioPluginAudioProcessorEditor::setControlsVisible (bool) {}
+
+void AudioPluginAudioProcessorEditor::mouseDown (const juce::MouseEvent&) {}
+
+bool AudioPluginAudioProcessorEditor::isNoteInScale (int midiNote, int root, int scaleIndex)
 {
-    repaint();
+    int interval = (midiNote - root + 120) % 12;
+    return SCALE_PATTERNS[scaleIndex][interval] == 1;
 }
 
 AudioPluginAudioProcessorEditor::NotePosition AudioPluginAudioProcessorEditor::findOptimalPosition (
     int midiNote, int preferredPosition, int fingerRange, int numStrings, int totalFrets)
 {
-    struct Candidate {
-        int stringIndex;
-        int fret;
-        int distance;
-        bool inZone;
-    };
-    std::vector<Candidate> candidates;
+    struct Candidate { int s; int f; int d; bool z; };
+    std::vector<Candidate> c;
 
-    int zoneStart = preferredPosition;
-    int zoneEnd = preferredPosition + fingerRange - 1;
-
-    for (int string = 0; string < numStrings; ++string)
+    for (int s = 0; s < numStrings; ++s)
     {
-        int openStringNote = GUITAR_TUNING[string];
-        int fret = midiNote - openStringNote;
-
-        if (fret >= 0 && fret <= totalFrets)
+        int f = midiNote - GUITAR_TUNING[s];
+        if (f >= 0 && f <= totalFrets)
         {
-            int distance = std::abs (string - currentString) + std::abs (fret - currentFret);
-            bool inZone = (fret >= zoneStart && fret <= zoneEnd);
-            candidates.push_back ({ string, fret, distance, inZone });
+            int d = std::abs(s - currentString) + std::abs(f - currentFret);
+            bool z = (f >= preferredPosition && f <= preferredPosition + fingerRange - 1);
+            c.push_back({s, f, d, z});
         }
     }
 
-    if (candidates.empty())
-        return { -1, -1, midiNote };
+    if (c.empty()) return {-1, -1, midiNote};
 
     Candidate* best = nullptr;
-    int bestDistance = INT_MAX;
+    int bestD = INT_MAX;
+    for (auto& x : c) if (x.z && x.d < bestD) { bestD = x.d; best = &x; }
+    if (!best) for (auto& x : c) if (x.d < bestD) { bestD = x.d; best = &x; }
 
-    for (auto& c : candidates)
-    {
-        if (c.inZone && c.distance < bestDistance)
-        {
-            bestDistance = c.distance;
-            best = &c;
-        }
-    }
-
-    if (best == nullptr)
-    {
-        for (auto& c : candidates)
-        {
-            if (c.distance < bestDistance)
-            {
-                bestDistance = c.distance;
-                best = &c;
-            }
-        }
-    }
-
-    return { best->stringIndex, best->fret, midiNote };
+    return {best->s, best->f, midiNote};
 }
 
 void AudioPluginAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (bgDark);
-    
+
+    const int position = (int) positionSlider.getValue();
+    const int range = (int) rangeSlider.getValue();
+    const int key = keySelector.getSelectedId() - 1;
+    const int scale = scaleSelector.getSelectedId() - 1;
+
     std::set<int> activeNotes;
     {
         std::lock_guard<std::mutex> lock (processorRef.notesMutex);
         activeNotes = processorRef.activeNotes;
     }
-    
-    const int position = (int) positionSlider.getValue();
-    const int range = (int) rangeSlider.getValue();
+
     const int numStrings = (int) stringsSlider.getValue();
-    const int totalFrets = (int) fretsSlider.getValue();
+    const int numFrets = (int) fretsSlider.getValue();
 
-    const int startFret = 0;
-    const int endFret = totalFrets;
-    const int numFrets = endFret - startFret + 1;
-    
-    const float controlsHeight = 50.0f;
-    const float headerHeight = 40.0f;
-    const float padding = 20.0f;
-    const float fretboardPadding = 15.0f;
-    const float fretMarkerHeight = 18.0f;
-    const float fretNumberHeight = 22.0f;
+    // Menu bar background
+    auto menuBar = getLocalBounds().removeFromTop (MENU_BAR_HEIGHT);
+    g.setColour (panelBg);
+    g.fillRect (menuBar);
 
-    auto bounds = getLocalBounds().toFloat();
+    // Subtle bottom border
+    g.setColour (controlBorder);
+    g.drawHorizontalLine (MENU_BAR_HEIGHT - 1, 0.0f, (float) getWidth());
 
-    auto cardArea = bounds.reduced (padding, 0)
-                          .withTrimmedTop (controlsHeight + 10)
-                          .withTrimmedBottom (padding);
+    // Scale notes panel - positioned after the scale selector (around x=207)
+    // Draw it in the space after the controls
+    auto scaleNotesArea = juce::Rectangle<int> (210, 10, 196, 24);
+    g.setColour (controlBg);
+    g.fillRoundedRectangle (scaleNotesArea.toFloat(), 4.0f);
+    g.setColour (controlBorder);
+    g.drawRoundedRectangle (scaleNotesArea.toFloat().reduced (0.5f), 4.0f, 1.0f);
 
-    g.setColour (bgCard);
-    g.fillRoundedRectangle (cardArea, 8.0f);
+    // Draw scale notes as small square boxes
+    float noteBoxW = 15.0f;
+    float noteBoxH = 18.0f;
+    float noteBoxGap = 1.0f;
+    float startX = scaleNotesArea.getX() + 4.0f;
+    float noteY = scaleNotesArea.getY() + 3.0f;
 
-    auto headerArea = cardArea.removeFromTop (headerHeight);
-
-    g.setColour (textPrimary);
-    g.setFont (16.0f);
-    g.drawText ("Show Me v0.9", headerArea.withTrimmedLeft (fretboardPadding),
-                juce::Justification::centredLeft, true);
-
-    juce::String noteText;
-    if (activeNotes.empty())
+    g.setFont (9.0f);
+    for (int i = 0; i < 12; ++i)
     {
-        g.setColour (textSecondary);
-        noteText = "No notes";
-    }
-    else
-    {
-        g.setColour (accentGreen);
-        for (auto it = activeNotes.begin(); it != activeNotes.end(); ++it)
-        {
-            if (it != activeNotes.begin()) noteText += "  ";
-            noteText += midiNoteToName (*it);
+        int noteIndex = (key + i) % 12;
+        bool inScale = SCALE_PATTERNS[scale][i] == 1;
+        bool isRoot = (i == 0);
+
+        float x = startX + i * (noteBoxW + noteBoxGap);
+        juce::Rectangle<float> noteBox (x, noteY, noteBoxW, noteBoxH);
+
+        if (isRoot) {
+            g.setColour (rootNote);
+        } else if (inScale) {
+            g.setColour (scaleNote);
+        } else {
+            g.setColour (outOfScale);
         }
+        g.fillRoundedRectangle (noteBox, 2.0f);
+
+        g.setColour (inScale ? textBright : textDim.withAlpha (0.4f));
+        g.drawText (juce::String (NOTE_NAMES[noteIndex]), noteBox, juce::Justification::centred, false);
     }
-    g.setFont (18.0f);
-    g.drawText (noteText, headerArea.withTrimmedRight (fretboardPadding),
-                juce::Justification::centredRight, true);
 
-    auto fretboardArea = cardArea.reduced (fretboardPadding, 0)
-                                  .withTrimmedBottom (fretboardPadding);
-
-    float fretboardTop = fretboardArea.getY() + fretMarkerHeight;
-    float fretboardBottom = fretboardArea.getBottom() - fretNumberHeight;
-    float fretboardHeight = fretboardBottom - fretboardTop;
-    float stringSpacing = fretboardHeight / (numStrings - 1);
-    float fretWidth = fretboardArea.getWidth() / numFrets;
-
-    g.setColour (textSecondary.withAlpha (0.5f));
-    for (int fret = startFret; fret <= endFret; ++fret)
+    // Active notes display on the right
+    if (!activeNotes.empty())
     {
-        if (hasFretMarker (fret))
+        juce::String noteStr;
+        for (int n : activeNotes)
         {
-            float x = fretboardArea.getX() + (fret - startFret + 0.5f) * fretWidth;
-            float markerY = fretboardArea.getY() + fretMarkerHeight / 2;
-
-            if (isDoubleDot (fret))
-            {
-                g.fillEllipse (x - 3, markerY - 7, 6, 6);
-                g.fillEllipse (x - 3, markerY + 1, 6, 6);
-            }
-            else
-            {
-                g.fillEllipse (x - 4, markerY - 4, 8, 8);
-            }
+            if (!noteStr.isEmpty()) noteStr += " ";
+            noteStr += noteNameOnly (n);
         }
+        g.setColour (activeNote);
+        g.setFont (juce::Font (16.0f, juce::Font::bold));
+        g.drawText (noteStr, menuBar.removeFromRight (100).reduced (8, 0),
+                    juce::Justification::centredRight);
     }
 
-    g.setColour (fretboardWood);
-    g.fillRoundedRectangle (fretboardArea.getX(), fretboardTop,
-                            fretboardArea.getWidth(), fretboardHeight, 4.0f);
+    // Fretboard area - explicitly below menu bar with gap
+    const int fretboardTop = MENU_BAR_HEIGHT + 6;
+    const int padding = 10;
+    const int fretNumSpace = 16;
 
-    float zoneStartX = fretboardArea.getX() + position * fretWidth;
-    float zoneEndX = fretboardArea.getX() + (position + range) * fretWidth;
+    // Fixed note sizes
+    const float fixedNoteH = 22.0f;
+    const float fixedStringSpacing = 28.0f;
+    float fretboardHeight = fixedStringSpacing * (numStrings - 1) + fixedNoteH;
 
-    g.setColour (juce::Colour (0, 0, 0).withAlpha (0.55f));
+    // Calculate fretboard bounds - vertically center
+    int availableHeight = getHeight() - fretboardTop - fretNumSpace - 4;
+    int yOffset = (availableHeight - (int)fretboardHeight) / 2;
+    if (yOffset < 0) yOffset = 0;
+
+    juce::Rectangle<int> fretArea (padding, fretboardTop + yOffset,
+                                    getWidth() - padding * 2, (int)fretboardHeight);
+
+    float stringSpacing = fixedStringSpacing;
+    float fretWidth = (float) fretArea.getWidth() / (numFrets + 1);
+
+    // Fretboard wood background
+    g.setColour (fretboardCol);
+    g.fillRoundedRectangle (fretArea.toFloat(), 4.0f);
+
+    // Position zone highlighting - use fretArea bounds directly
+    float zoneX1 = fretArea.getX() + position * fretWidth;
+    float zoneX2 = fretArea.getX() + (position + range) * fretWidth;
+    float fretAreaY = (float) fretArea.getY();
+    float fretAreaH = (float) fretArea.getHeight();
+
+    // Dim outside zone
+    g.setColour (juce::Colour (0, 0, 0).withAlpha (0.65f));
     if (position > 0)
-    {
-        g.fillRoundedRectangle (fretboardArea.getX(), fretboardTop,
-                                zoneStartX - fretboardArea.getX(), fretboardHeight, 4.0f);
-    }
-    if (position + range < totalFrets)
-    {
-        g.fillRoundedRectangle (zoneEndX, fretboardTop,
-                                fretboardArea.getRight() - zoneEndX, fretboardHeight, 4.0f);
-    }
+        g.fillRect ((float)fretArea.getX(), fretAreaY, zoneX1 - fretArea.getX(), fretAreaH);
+    if (position + range <= numFrets)
+        g.fillRect (zoneX2, fretAreaY, (float)fretArea.getRight() - zoneX2, fretAreaH);
 
-    g.setColour (accentBlue.withAlpha (0.15f));
-    g.fillRect (zoneStartX, fretboardTop, zoneEndX - zoneStartX, fretboardHeight);
-    g.setColour (accentBlue.withAlpha (0.4f));
-    g.drawRect (zoneStartX, fretboardTop, zoneEndX - zoneStartX, fretboardHeight, 2.0f);
+    // Zone border
+    g.setColour (accentBlue);
+    g.drawRect (zoneX1, fretAreaY, zoneX2 - zoneX1, fretAreaH, 2.0f);
 
-    for (int fret = startFret; fret <= endFret; ++fret)
+    // Nut
+    float nutX = fretArea.getX() + fretWidth;
+    g.setColour (nutBone);
+    g.fillRect (nutX - 2.0f, fretAreaY, 4.0f, fretAreaH);
+
+    // Fret lines (subtle, between note columns)
+    g.setColour (fretMetal.withAlpha (0.4f));
+    for (int f = 1; f <= numFrets; ++f)
     {
-        float x = fretboardArea.getX() + (fret - startFret + 1) * fretWidth;
-        if (fret < endFret)
-        {
-            g.setColour (fret == 0 ? fretWire : fretWire.withAlpha (0.6f));
-            g.drawLine (x, fretboardTop, x, fretboardBottom, fret == 0 ? 3.0f : 1.0f);
-        }
+        float x = fretArea.getX() + (f + 1) * fretWidth;
+        g.drawLine (x, fretAreaY, x, fretAreaY + fretAreaH, 1.0f);
     }
 
-    for (int string = 0; string < numStrings; ++string)
+    // Get optimal positions for active notes
+    std::vector<NotePosition> optimalPos;
+    for (int n : activeNotes)
     {
-        float y = fretboardTop + string * stringSpacing;
-        float thickness = 0.8f + (string * 0.35f);
-        g.setColour (stringColor.withAlpha (0.8f));
-        g.drawLine (fretboardArea.getX(), y, fretboardArea.getRight(), y, thickness);
-    }
-
-    std::vector<NotePosition> optimalPositions;
-    for (int midiNote : activeNotes)
-    {
-        NotePosition pos = findOptimalPosition (midiNote, position, range, numStrings, totalFrets);
+        auto pos = findOptimalPosition (n, position, range, numStrings, numFrets);
         if (pos.stringIndex >= 0)
         {
-            optimalPositions.push_back (pos);
-            if (optimalPositions.size() == 1)
-            {
-                currentString = pos.stringIndex;
-                currentFret = pos.fret;
-            }
+            optimalPos.push_back (pos);
+            if (optimalPos.size() == 1) { currentString = pos.stringIndex; currentFret = pos.fret; }
         }
     }
 
-    for (const auto& pos : optimalPositions)
-    {
-        float stringY = fretboardTop + pos.stringIndex * stringSpacing;
-        float fretCenterX = fretboardArea.getX() + (pos.fret - startFret + 0.5f) * fretWidth;
-        float circleSize = 26.0f;
+    // Draw notes - set font ONCE before loop to prevent layout shifts
+    float noteW = juce::jmin (fretWidth * 0.85f, 28.0f);
+    float noteH = fixedNoteH;
+    juce::Font noteFont (10.0f);
+    g.setFont (noteFont);
 
-        g.setColour (accentGreen.withAlpha (0.25f));
-        g.fillEllipse (fretCenterX - circleSize/2 - 5, stringY - circleSize/2 - 5,
-                       circleSize + 10, circleSize + 10);
-        
-        g.setColour (accentGreen);
-        g.fillEllipse (fretCenterX - circleSize/2, stringY - circleSize/2, circleSize, circleSize);
-        
-        g.setColour (accentGreen.brighter (0.3f));
-        g.fillEllipse (fretCenterX - circleSize/4, stringY - circleSize/3,
-                       circleSize/3, circleSize/4);
-        
-        g.setColour (bgDark);
-        g.setFont (10.0f);
-        g.drawText (midiNoteToName (pos.midiNote),
-                    (int)(fretCenterX - circleSize/2), (int)(stringY - circleSize/2),
-                    (int)circleSize, (int)circleSize,
-                    juce::Justification::centred, false);
+    // Notes are positioned so first row starts at top of fretArea + half note height
+    float firstNoteY = fretAreaY + noteH / 2.0f;
+
+    for (int s = 0; s < numStrings; ++s)
+    {
+        float y = firstNoteY + s * stringSpacing;
+        int openNote = GUITAR_TUNING[s];
+
+        for (int f = 0; f <= numFrets; ++f)
+        {
+            int midi = openNote + f;
+            float x = fretArea.getX() + (f + 0.5f) * fretWidth;
+            int noteClass = midi % 12;
+
+            bool isActive = false;
+            for (auto& p : optimalPos)
+                if (p.stringIndex == s && p.fret == f) { isActive = true; break; }
+
+            bool isRoot = (noteClass == key);
+            bool inScale = isNoteInScale (midi, key, scale);
+
+            juce::Colour bg, fg;
+            if (isActive) {
+                bg = activeNote;
+                fg = bgDark;
+            } else if (isRoot) {
+                bg = rootNote;
+                fg = textBright;
+            } else if (inScale) {
+                bg = scaleNote;
+                fg = textBright;
+            } else {
+                bg = outOfScale;
+                fg = textDim.withAlpha (0.5f);
+            }
+
+            juce::Rectangle<float> noteRect (x - noteW/2, y - noteH/2, noteW, noteH);
+
+            if (isActive)
+            {
+                g.setColour (activeNote.withAlpha (0.4f));
+                g.fillRoundedRectangle (noteRect.expanded (3), 4.0f);
+            }
+
+            g.setColour (bg);
+            g.fillRoundedRectangle (noteRect, 3.0f);
+
+            g.setColour (fg);
+            g.drawText (noteNameOnly (midi), noteRect, juce::Justification::centred, false);
+        }
     }
 
-    g.setColour (textSecondary.withAlpha (0.6f));
-    g.setFont (11.0f);
-    for (int fret = startFret; fret <= endFret; ++fret)
+    // Fret numbers
+    g.setColour (textDim);
+    g.setFont (10.0f);
+    for (int f = 0; f <= numFrets; f += 3)
     {
-        float x = fretboardArea.getX() + (fret - startFret + 0.5f) * fretWidth;
-        g.drawText (juce::String (fret),
-                    (int)(x - 12), (int)(fretboardBottom + 4), 24, 18,
-                    juce::Justification::centred, false);
+        float x = fretArea.getX() + (f + 0.5f) * fretWidth;
+        g.drawText (juce::String (f), (int)(x - 10), fretArea.getBottom() + 2, 20, 14,
+                    juce::Justification::centred);
     }
 }
 
 void AudioPluginAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
-    auto controlsArea = bounds.removeFromTop (50).reduced (25, 12);
+    auto menuBar = bounds.removeFromTop (MENU_BAR_HEIGHT).reduced (12, 6);
 
-    const int labelWidth = 55;
-    const int sliderWidth = 100;
-    const int spacing = 40;
+    int h = menuBar.getHeight();
+    int labelH = 12;
+    int ctrlH = h - labelH;
+    int y = menuBar.getY();
+    int x = menuBar.getX();
 
-    positionLabel.setBounds (controlsArea.removeFromLeft (labelWidth));
-    positionSlider.setBounds (controlsArea.removeFromLeft (sliderWidth));
-    controlsArea.removeFromLeft (spacing);
+    // Key
+    keyLabel.setBounds (x, y, 30, labelH);
+    keySelector.setBounds (x, y + labelH, 55, ctrlH);
+    x += 65;
 
-    rangeLabel.setBounds (controlsArea.removeFromLeft (labelWidth));
-    rangeSlider.setBounds (controlsArea.removeFromLeft (sliderWidth));
-    controlsArea.removeFromLeft (spacing);
+    // Scale
+    scaleLabel.setBounds (x, y, 40, labelH);
+    scaleSelector.setBounds (x, y + labelH, 130, ctrlH);
+    x += 142;
 
-    stringsLabel.setBounds (controlsArea.removeFromLeft (labelWidth));
-    stringsSlider.setBounds (controlsArea.removeFromLeft (sliderWidth));
-    controlsArea.removeFromLeft (spacing);
+    // Skip space for scale notes panel (196 + padding)
+    x += 206;
 
-    fretsLabel.setBounds (controlsArea.removeFromLeft (labelWidth));
-    fretsSlider.setBounds (controlsArea.removeFromLeft (sliderWidth));
+    // Position
+    positionLabel.setBounds (x, y, 60, labelH);
+    positionSlider.setBounds (x, y + labelH, 110, ctrlH);
+    x += 120;
+
+    // Range
+    rangeLabel.setBounds (x, y, 50, labelH);
+    rangeSlider.setBounds (x, y + labelH, 100, ctrlH);
+    x += 110;
+
+    // Strings
+    stringsLabel.setBounds (x, y, 55, labelH);
+    stringsSlider.setBounds (x, y + labelH, 95, ctrlH);
+    x += 105;
+
+    // Frets
+    fretsLabel.setBounds (x, y, 50, labelH);
+    fretsSlider.setBounds (x, y + labelH, 100, ctrlH);
 }
