@@ -73,6 +73,15 @@ public:
     }
 };
 
+// Modern combo box look and feel
+class ModernLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    ModernLookAndFeel();
+    void drawComboBox (juce::Graphics& g, int width, int height, bool,
+                       int, int, int, int, juce::ComboBox& box) override;
+};
+
 class AudioPluginAudioProcessorEditor : public juce::AudioProcessorEditor,
                                          private juce::Timer,
                                          private juce::Slider::Listener
@@ -89,15 +98,30 @@ private:
     void sliderValueChanged (juce::Slider* slider) override;
     void copyLogToClipboard();
     void showDebugMenu();
+    void drawTuner (juce::Graphics& g, juce::Rectangle<int> area, int midiNote, float pitch, float cents);
+    void drawFretboard (juce::Graphics& g, juce::Rectangle<int> area, int midiNote);
 
     AudioPluginAudioProcessor& processorRef;
 
     // Modern look and feel
     ModernSliderLookAndFeel modernLookAndFeel;
+    ModernLookAndFeel comboLookAndFeel;
 
-    // Sliders
+    // Tuner controls
     juce::Slider sensitivitySlider;
     juce::Slider holdSlider;
+
+    // Fretboard controls
+    juce::ComboBox keySelector;
+    juce::ComboBox scaleSelector;
+    juce::Slider positionSlider;
+    juce::Slider rangeSlider;
+    juce::Slider stringsSlider;
+    juce::Slider fretsSlider;
+
+    // Labels
+    juce::Label keyLabel, scaleLabel, positionLabel, rangeLabel, stringsLabel, fretsLabel;
+    juce::Label sensLabel, holdLabel;
 
     // Debug button
     juce::TextButton debugButton;
